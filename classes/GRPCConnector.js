@@ -27,9 +27,9 @@ export class GRPCConnector {
         this.grpcClient = this.grpcClient || new this.grpcProto.Service(`${host}:${port}`, grpc.credentials.createInsecure())
         return this.grpcClient
     }
-    getGrpcServer() {
+    initGRPCServer() {
         if(!this.grpcServer) {
-            this.server = new grpc.Server() 
+            this.grpcServer = new grpc.Server() 
             this.server.addService(this.grpcProto.Service.service, {
                 CallFunction: this.callFunction.bind(this),
             }) 
@@ -46,12 +46,15 @@ export class GRPCConnector {
         callback(null, response);
     }
     connect(service = () => {}, serviceInfo = new Object()) {
-        const {host, port} = serviceInfo
+        const {host, port} = this.connectorOptions
     }
     publish(service = () => {}, serviceInfo = new Object()) {
         this.service = service 
         const {host, port} = serviceInfo
-        const server = this.getGrpcServer(host, port)
+        this.initGRPCServer(host, port) 
+        const credentials =  this.createGRPCServerCredentials()
+        const endpoint = this.getGRPCEndpoint()
+        this.bindGRPCServer(endpoint, credentials)
     }
     createGRPCServerCredentials() {
         let credentials;
@@ -75,10 +78,5 @@ export class GRPCConnector {
             if (error) throw new Error('Failed to bind GRPC server', error)  
             this.server.start()
         })
-    }
-    start() {
-        const credentials =  this.createGRPCServerCredentials()
-        const endpoint = this.getGRPCEndpoint()
-        this.bindGRPCServer(endpoint, credentials)
-    }
+    } 
 }
