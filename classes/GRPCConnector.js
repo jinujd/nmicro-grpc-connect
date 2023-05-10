@@ -15,6 +15,7 @@ export class GRPCConnector {
     grpcProto = null
     grpcClient = null
     grpcServer = null
+    grpcService = null
     connectorOptions = new GRPCConnectorOptions()
     constructor(options =  DEFAULT_OPTIONS) {
         this.init(options)
@@ -24,15 +25,16 @@ export class GRPCConnector {
         this.connectorOptions = new GRPCConnectorOptions(options)
         const packageDefinition = protoLoader.loadSync(PROTO_PATH, this.grpcOptions)
         this.grpcProto = grpc.loadPackageDefinition(packageDefinition).Service
+        this.grpcService = this.grpcProto.service
     }
     getGrpcClient(host, port) { 
-        this.grpcClient = this.grpcClient || new this.grpcProto.Service(`${host}:${port}`, grpc.credentials.createInsecure())
+        this.grpcClient = this.grpcClient || new this.grpcService(`${host}:${port}`, grpc.credentials.createInsecure())
         return this.grpcClient
     }
     initGRPCServer() {
         if(!this.grpcServer) {
             this.grpcServer = new grpc.Server() 
-            this.server.addService(this.grpcProto.Service.service, {
+            this.grpcServer.addService(this.grpcService, {
                 CallFunction: this.callServiceFunction.bind(this),
             }) 
         }
@@ -90,9 +92,9 @@ export class GRPCConnector {
         return `${host}:${port}`
     }
     bindGRPCServer(endpoint, credentials) {
-        this.server.bindAsync(endpoint, credentials, (error) => {
+        this.grpcServer.bindAsync(endpoint, credentials, (error) => {
             if (error) throw new Error('Failed to bind GRPC server', error)  
-            this.server.start()
+            this.grpcServer.start()
         })
     } 
 }
