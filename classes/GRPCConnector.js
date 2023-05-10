@@ -14,12 +14,12 @@ export class GRPCConnector {
     grpcProto = null
     grpcClient = null
     grpcServer = null
-    grpcConnectorOptions = new GRPCConnectorOptions()
+    connectorOptions = new GRPCConnectorOptions()
     constructor(options =  DEFAULT_OPTIONS) {
         this.init(options)
     }
     init(options = DEFAULT_OPTIONS) {   
-        this.grpcConnectorOptions = new GRPCConnectorOptions(options)
+        this.connectorOptions = new GRPCConnectorOptions(options)
         const packageDefinition = protoLoader.loadSync(PROTO_PATH, this.grpcOptions)
         this.grpcProto = grpc.loadPackageDefinition(packageDefinition).Service
     }
@@ -27,7 +27,7 @@ export class GRPCConnector {
         this.grpcClient = this.grpcClient || new this.grpcProto.Service(`${host}:${port}`, grpc.credentials.createInsecure())
         return this.grpcClient
     }
-    getGrpcServer(host, port) {
+    getGrpcServer() {
         if(!this.grpcServer) {
             this.server = new grpc.Server() 
             this.server.addService(this.grpcProto.Service.service, {
@@ -53,25 +53,32 @@ export class GRPCConnector {
         const {host, port} = serviceInfo
         const server = this.getGrpcServer(host, port)
     }
-    start(port, useSSL) {
+    createGRPCServerCredentials() {
         let credentials;
+        const {useSSL, SSLOptions: {rootCert, privateKey, certChain}} = this.connectorOptions 
         if (useSSL) {
-          const rootCert = fs.readFileSync('path/to/root_certificate.pem');
-          const privateKey = fs.readFileSync('path/to/private_key.pem');
-          const certChain = fs.readFileSync('path/to/certificate_chain.pem');
-          credentials = grpc.ServerCredentials.createSsl(rootCert, [{ private_key: privateKey, cert_chain: certChain }], true);
+          const rootCertData = fs.readFileSync(rootCert)
+          const privateKeyData = fs.readFileSync(privateKey)
+          const certChainData = fs.readFileSync(certChain)
+          credentials = grpc.ServerCredentials.createSsl(rootCertData, [{ private_key: privateKeyData, cert_chain: certChainData }], true)
         } else {
-          credentials = grpc.ServerCredentials.createInsecure();
-        }
-      
-        this.server.bindAsync(`0.0.0.0:${port}`, credentials, (error, port) => {
-          if (error) {
-            console.error('Failed to bind server:', error);
-            return;
-          }
-          const protocol = useSSL ? 'HTTPS' : 'HTTP';
-          console.log(`Server running at ${protocol} 0.0.0.0:${port}`);
-          this.server.start();
-        });
-      }
+          credentials = grpc.ServerCredentials.createInsecure()
+        } 
+        return credentials
+    }
+    getGRPCEndpoint() {
+        const {host, port} = this.connectorOptions
+        return `${host}:${port}`
+    }
+    bindGRPCServer(endpoint, credentials) {
+        this.server.bindAsync(endpoint, credentials, (error) => {
+            if (error) throw new Error('Failed to bind GRPC server', error)  
+            this.server.start()
+        })
+    }
+    start() {
+        const credentials =  this.createGRPCServerCredentials()
+        const endpoint = this.getGRPCEndpoint()
+        this.bindGRPCServer(endpoint, credentials)
+    }
 }
