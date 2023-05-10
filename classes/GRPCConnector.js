@@ -1,6 +1,7 @@
 import grpc from "@grpc/grpc-js"
 import protoLoader from "@grpc/proto-loader"
 import {GRPCConnectorOptions, DEFAULT_OPTIONS} from "./GRPCConnectorOptions.js" 
+import {isAsyncFunction} from "../utils/helpers.js"
 const PROTO_PATH = "../schemas/service.proto" 
 export class GRPCConnector {
     service = {}
@@ -18,6 +19,7 @@ export class GRPCConnector {
     constructor(options =  DEFAULT_OPTIONS) {
         this.init(options)
     }
+    
     init(options = DEFAULT_OPTIONS) {   
         this.connectorOptions = new GRPCConnectorOptions(options)
         const packageDefinition = protoLoader.loadSync(PROTO_PATH, this.grpcOptions)
@@ -31,22 +33,36 @@ export class GRPCConnector {
         if(!this.grpcServer) {
             this.grpcServer = new grpc.Server() 
             this.server.addService(this.grpcProto.Service.service, {
-                CallFunction: this.callFunction.bind(this),
+                CallFunction: this.callServiceFunction.bind(this),
             }) 
         }
         return this.grpcServer
-    }
-    callFunction(call, callback) {
+    } 
+    async callServiceFunction(call, callback) {
         const request = call.request
         const {functionName, parameters} = request
         const fn = !functionName? this.service: this.service[functionName]
         if(!fn) return callback(new Error(`Function '${functionName}' is not supported.`), null)
-        const result = fn(...parameters)
+        const result = isAsyncFunction(fn)? await fn(...parameters): fn(...parameters)
         const response = { response: result }
         callback(null, response);
     }
-    connect(service = () => {}, serviceInfo = new Object()) {
+    connect() {
         const {host, port} = this.connectorOptions
+        const Service =  this.grpcProto;
+        const credentials =  this.createGRPCServerCredentials()
+        const endpoint = this.getGRPCEndpoint()
+        this.grpcClient = new Service(endpoint, credentials)
+    }
+    call(functionName = "", parameters = [], serviceInfo = new Object()) {
+        this.connect()
+        const request = {functionName, parameters}
+        return new Promise((resolve, reject) => {
+            this.grpcClient.CallFunction(request, (error, response) => {
+                if(error) return reject(error)
+                resolve(response)
+            })
+        })
     }
     publish(service = () => {}, serviceInfo = new Object()) {
         this.service = service 
