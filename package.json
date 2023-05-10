@@ -1,0 +1,32 @@
+{
+  "name": "nmicro-grpc-connect",
+  "version": "1.0.0",
+  "description": "Service connector adapter for nmicro using grpc",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jinujd/nmicro-grpc-connect.git"
+  },
+  "keywords": [
+    "nmicro",
+    "nmicro-grpc-connect",
+    "grpc",
+    "microservices",
+    "nmicro",
+    "grpc"
+  ],
+  "author": "Jinu Joseph Daniel",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jinujd/nmicro-grpc-connect/issues"
+  },
+  "homepage": "https://github.com/jinujd/nmicro-grpc-connect#readme",
+  "dependencies": {
+    "@grpc/grpc-js": "^1.8.14",
+    "nmicro-service": "^1.0.4"
+  }
+}
