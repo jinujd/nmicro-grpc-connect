@@ -27,6 +27,7 @@
   "homepage": "https://github.com/jinujd/nmicro-grpc-connect#readme",
   "dependencies": {
     "@grpc/grpc-js": "^1.8.14",
-    "nmicro-service": "^1.0.4"
+    "nmicro-service": "^1.0.4",
+    "protobufjs": "^7.2.3"
   }
 }
