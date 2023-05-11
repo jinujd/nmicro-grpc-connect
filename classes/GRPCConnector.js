@@ -3,7 +3,7 @@ import protoLoader from "@grpc/proto-loader"
 import protobuf from 'protobufjs'
 import path from 'path'
 import {GRPCConnectorOptions, DEFAULT_OPTIONS} from "./GRPCConnectorOptions.js" 
-import {isAsyncFunction, cwd} from "../utils/helpers.js"    
+import {isFunction, isAsyncFunction, cwd} from "../utils/helpers.js"    
 export class GRPCConnector {
     service = {}
     grpcOptions = {
@@ -17,7 +17,7 @@ export class GRPCConnector {
     grpcClient = null
     grpcServer = null
     grpcService = null
-    packageDefinition = null
+    grpcPackageDefinition = null
     connectorOptions = new GRPCConnectorOptions()
     constructor(options =  DEFAULT_OPTIONS) {
         this.init(options)
@@ -26,8 +26,8 @@ export class GRPCConnector {
     init(options = DEFAULT_OPTIONS) {   
         this.connectorOptions = new GRPCConnectorOptions(options) 
         
-        this.packageDefinition = protoLoader.loadSync(path.resolve(cwd(import.meta.url), '..', 'schemas', 'service.proto'), this.grpcOptions)
-        this.grpcProto = grpc.loadPackageDefinition(this.packageDefinition).Service
+        this.grpcPackageDefinition = protoLoader.loadSync(path.resolve(cwd(import.meta.url), '..', 'schemas', 'service.proto'), this.grpcOptions)
+        this.grpcProto = grpc.loadPackageDefinition(this.grpcPackageDefinition).Service
         this.grpcService = this.grpcProto.service
     }
     getGrpcClient(host, port) { 
@@ -46,34 +46,57 @@ export class GRPCConnector {
     async callServiceFunction(call, callback) { 
         const request = call.request
         const {functionName, parameters} = request
+        console.log(`params identified`, parameters)
         const fn = !functionName? this.service: this.service[functionName]
         if(!fn) return callback(new Error(`Function '${functionName}' is not supported.`), null)
-        const result = isAsyncFunction(fn)? await fn(...parameters): fn(...parameters)
-        const response = { response: result }
-        console.log(`Responding with result`, response)
+        let result = null
+        if(isFunction(fn))
+            result = isAsyncFunction(fn)? await fn(...parameters): fn(...parameters)
+        else 
+            result = fn
+        result = result !== undefined? result: {}
+        const response = { response: JSON.stringify(result) } 
         callback(null, response);
     }
     connect() { 
         const Service =  this.grpcProto;
-        const credentials =  this.createGRPCClientCredentials()
-        console.log(credentials.constructor.name)
+        const credentials =  this.createGRPCClientCredentials() 
         const endpoint = this.getGRPCEndpoint() 
         this.grpcClient = new Service(endpoint, credentials)
     }
-    decodeServiceResponse(response) {
-        const anyValue = response.response;
-        const decodedResult = Response.decode(anyValue);
-        const result = Response.toObject(decodedResult, {
-          longs: String,
-          enums: String,
-          bytes: Buffer,
-        });
-        return result;
-        return result;
-      }
+    decodeServiceResponse(response) {  
+        return JSON.parse(response.response);
+    }
+    getTypeBasedOnProto(param) { 
+        
+        const parameter = new protobuf.Message(this.grpcPackageDefinition['service.proto'].nested.Parameter); 
+        if (typeof param === 'boolean') {
+            parameter.setBoolValue(param);
+        } else if (typeof param === 'string') {
+            parameter.setStringValue(param);
+        } else if (typeof param === 'number') {
+            parameter.setIntValue(param);
+        }
+    }
     call(functionName = "", parameters = [], serviceInfo = new Object()) {
         this.connect()
-        const request = {functionName, parameters}
+                
+        const Parameter = this.grpcPackageDefinition.lookupType('Parameter');
+        const Request = this.grpcPackageDefinition.lookupType('Request');
+
+        const serializedParams = parameters.map(param => {
+            const parameter = Parameter.create();
+            if (typeof param === 'boolean') {
+            parameter.boolValue = param;
+            } else if (typeof param === 'string') {
+            parameter.stringValue = param;
+            } else if (typeof param === 'number') {
+            parameter.intValue = param;
+            }
+            return Parameter.encode(parameter).finish();
+        });
+        console.log(`Params to sent`, parameters)
+        const request = {functionName, parameters: serializedParams}
         return new Promise((resolve, reject) => {
             this.grpcClient.CallFunction(request, (error, response) => {
                 if(error) return reject(error)
